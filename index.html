@@ -29,6 +29,16 @@
                     <label for="password">Senha:</label>
                     <input type="password" id="password" name="password" required>
                 </div>
+                <!-- Fields only for registration -->
+                <div class="form-group registration-field" style="display: none;">
+                    <label for="company-name">Nome da Empresa/Loja:</label>
+                    <input type="text" id="company-name" name="company-name">
+                </div>
+                <div class="form-group registration-field" style="display: none;">
+                    <label for="daily-hours">Horas de Trabalho Diárias:</label>
+                    <input type="number" id="daily-hours" name="daily-hours" min="1" max="24" step="0.5">
+                    <span class="form-help-text">Ex: 8, 7.5 (para 7 horas e 30 minutos)</span>
+                </div>
                 <button type="submit" id="auth-button">Entrar</button>
                 <p id="auth-error" class="error-message"></p>
                 <p><a href="#" id="switch-to-register">Não tem conta? Cadastre-se</a></p>

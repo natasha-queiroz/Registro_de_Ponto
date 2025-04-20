@@ -2,7 +2,7 @@ body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
     margin: 0;
     padding: 15px; 
-    background-color: #5e3ea1; 
+    background-color: #eef1f5; 
     color: #333;
     display: flex;
     justify-content: center;
@@ -120,6 +120,12 @@ button:disabled {
     background-color: #fff;
 }
 
+.form-help-text {
+    display: block;
+    font-size: 0.8em;
+    color: #666;
+    margin-top: 4px;
+}
 
 .form-group textarea {
      resize: vertical;
@@ -317,8 +323,23 @@ button:disabled {
 }
 #history-list .punch-type { font-weight: bold; color: #1a73e8; }
 #history-list .punch-time { color: #555; }
-#history-list .punch-details { color: #777; font-size: 0.85em; }
+#history-list .punch-details {
+    color: #777;
+    font-size: 0.85em;
+    word-break: break-word; 
+}
 
+#history-list .punch-details a {
+    color: #0056b3; 
+    text-decoration: none;
+    font-weight: normal; 
+    font-size: 0.9em; 
+    margin-left: 5px;
+}
+
+#history-list .punch-details a:hover {
+    text-decoration: underline;
+}
 
 .error-message, .feedback-message {
     font-size: 0.9em;
@@ -371,6 +392,23 @@ button:disabled {
     margin-left: 0;
     padding: 10px 15px; 
     font-size: 0.9em;
+}
+
+.error-text {
+    color: #dc3545; 
+    font-style: italic;
+}
+
+#modal-location-info .verification-link a {
+    color: #0056b3; 
+    text-decoration: none;
+    font-weight: normal; 
+    font-size: 0.9em; 
+    margin-left: 5px;
+}
+
+#modal-location-info .verification-link a:hover {
+    text-decoration: underline;
 }
 
 /* FAB Button Styles */

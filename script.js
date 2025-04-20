@@ -23,6 +23,11 @@ const authError = document.getElementById('auth-error');
 const switchToRegisterLink = document.getElementById('switch-to-register');
 const switchToLoginLink = document.getElementById('switch-to-login');
 
+// New Registration Fields
+const registrationFields = document.querySelectorAll('.registration-field');
+const companyNameInput = document.getElementById('company-name');
+const dailyHoursInput = document.getElementById('daily-hours');
+
 // Tracking Screen
 const loggedInUserSpan = document.getElementById('logged-in-user');
 const currentDatetimeSpan = document.getElementById('current-datetime');
@@ -69,6 +74,7 @@ let isRegisterMode = false;
 let modalCurrentCoords = null; 
 let modalCurrentPhotoFile = null; 
 let dateTimeInterval = null; 
+let sessionInterval = null; 
 
 // --- Utility Functions ---
 function showScreen(screenId) {
@@ -113,14 +119,17 @@ function clearAuthForm() {
     usernameInput.value = '';
     passwordInput.value = '';
     authError.textContent = '';
+    // Also clear registration fields
+    companyNameInput.value = '';
+    dailyHoursInput.value = '';
 }
 
 function clearAddPunchModalForm() {
-    punchTypeSelect.value = ''; 
+    punchTypeSelect.value = '';
     modalNotesInput.value = '';
-    modalLocationInfoSpan.textContent = 'Aguardando...';
+    modalLocationInfoSpan.innerHTML = 'Aguardando... <span class="verification-link"></span>'; // Clear previous link
     modalLocationCoordsInput.value = '';
-    modalPhotoInput.value = ''; 
+    modalPhotoInput.value = '';
     modalPhotoInfoSpan.textContent = 'Nenhuma foto selecionada.';
     modalPhotoPreview.src = '#'; 
     modalPhotoPreview.style.display = 'none'; 
@@ -138,6 +147,20 @@ function updateDateTime() {
     modalCurrentDatetimeSpan.textContent = formattedDateTime; 
 }
 
+function formatDuration(totalSeconds) {
+    if (isNaN(totalSeconds) || totalSeconds < 0) {
+        return '00:00:00';
+    }
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
+function createGoogleMapsLink(latitude, longitude) {
+    return `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
+}
+
 // --- Screen Navigation ---
 goToRegisterBtn.addEventListener('click', () => {
     isRegisterMode = true;
@@ -145,6 +168,7 @@ goToRegisterBtn.addEventListener('click', () => {
     authButton.textContent = 'Cadastrar';
     switchToRegisterLink.style.display = 'none';
     switchToLoginLink.style.display = 'block';
+    registrationFields.forEach(field => field.style.display = 'block'); // Show registration fields
     clearAuthForm();
     showScreen('auth-screen');
 });
@@ -155,6 +179,7 @@ goToLoginBtn.addEventListener('click', () => {
     authButton.textContent = 'Entrar';
     switchToRegisterLink.style.display = 'block';
     switchToLoginLink.style.display = 'none';
+    registrationFields.forEach(field => field.style.display = 'none'); // Hide registration fields
     clearAuthForm();
     showScreen('auth-screen');
 });
@@ -209,24 +234,48 @@ authForm.addEventListener('submit', (e) => {
     const users = getUsers();
 
     if (isRegisterMode) {
+        const companyName = companyNameInput.value.trim();
+        const dailyHoursString = dailyHoursInput.value.trim();
+        const dailyHours = parseFloat(dailyHoursString);
+
+        // Registration validation
         if (users[username]) {
             authError.textContent = 'Este nome de usuário já existe.';
-        } else {
-            users[username] = password; 
-            saveUsers(users);
-            alert('Cadastro realizado com sucesso! Faça o login.');
-            goToLoginBtn.click();
+            return;
         }
+        if (!companyName) {
+            authError.textContent = 'O nome da empresa/loja é obrigatório.';
+            return;
+        }
+        if (!dailyHoursString || isNaN(dailyHours) || dailyHours <= 0 || dailyHours > 24) {
+            authError.textContent = 'Informe um valor válido para as horas diárias (entre 1 e 24).';
+            return;
+        }
+
+        // Save new user data with the new structure
+        users[username] = {
+            password: password,
+            company: companyName,
+            dailyHours: dailyHours // Store as a number
+        };
+        saveUsers(users);
+        alert('Cadastro realizado com sucesso! Faça o login.');
+        goToLoginBtn.click(); // Switch to login mode after registration
+
     } else {
-        if (users[username] && users[username] === password) {
+        // Login validation using the new structure
+        if (users[username] && users[username].password === password) {
             currentUser = username;
+            // Optionally load company/hours info here if needed immediately
+            // const userData = users[username];
             loggedInUserSpan.textContent = currentUser;
-            localStorage.setItem('time_tracker_session', currentUser); 
+            localStorage.setItem('time_tracker_session', currentUser);
             clearAuthForm();
             updateDateTime(); 
             if (!dateTimeInterval) { 
                  dateTimeInterval = setInterval(updateDateTime, 1000); 
             }
+            updateTrackingScreenUI(); // Make sure UI is updated after login
             showScreen('tracking-screen');
         } else {
             authError.textContent = 'Nome de usuário ou senha inválidos.';
@@ -259,8 +308,8 @@ window.addEventListener('click', (event) => {
 
 // --- Time Tracking Logic (within Modal) ---
 modalGetLocationBtn.addEventListener('click', () => {
-    modalLocationInfoSpan.textContent = 'Obtendo...';
-    modalLocationInfoSpan.style.color = '#555'; 
+    modalLocationInfoSpan.innerHTML = 'Obtendo... <span class="verification-link"></span>'; // Clear link
+    modalLocationInfoSpan.style.color = '#555';
     modalGetLocationBtn.disabled = true;
     navigator.geolocation.getCurrentPosition(
         (position) => {
@@ -268,19 +317,22 @@ modalGetLocationBtn.addEventListener('click', () => {
                 latitude: position.coords.latitude,
                 longitude: position.coords.longitude
             };
-            modalLocationCoordsInput.value = `${modalCurrentCoords.latitude}, ${modalCurrentCoords.longitude}`;
-            modalLocationInfoSpan.textContent = `Lat: ${modalCurrentCoords.latitude.toFixed(4)}, Lon: ${modalCurrentCoords.longitude.toFixed(4)}`;
-            modalGetLocationBtn.disabled = false; 
+            // Store coords in the hidden input as "lat,lon" for saving
+            modalLocationCoordsInput.value = `${modalCurrentCoords.latitude},${modalCurrentCoords.longitude}`;
+            // Display user-friendly text and a verification link
+            const mapsLink = createGoogleMapsLink(modalCurrentCoords.latitude, modalCurrentCoords.longitude);
+            modalLocationInfoSpan.innerHTML = `Lat: ${modalCurrentCoords.latitude.toFixed(4)}, Lon: ${modalCurrentCoords.longitude.toFixed(4)} <span class="verification-link">(<a href="${mapsLink}" target="_blank" rel="noopener noreferrer">Verificar no Mapa</a>)</span>`;
+            modalGetLocationBtn.disabled = false;
         },
         (error) => {
             console.error("Geolocation error:", error);
-            modalLocationInfoSpan.textContent = `Erro: ${error.message}`;
-            modalLocationInfoSpan.style.color = '#dc3545'; 
-            modalLocationCoordsInput.value = 'error';
-            modalCurrentCoords = null; 
-            modalGetLocationBtn.disabled = false; 
+            modalLocationInfoSpan.innerHTML = `Erro: ${error.message} <span class="verification-link"></span>`; // Clear link
+            modalLocationInfoSpan.style.color = '#dc3545';
+            modalLocationCoordsInput.value = 'error'; // Keep 'error' state
+            modalCurrentCoords = null;
+            modalGetLocationBtn.disabled = false;
         },
-        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 } 
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     );
 });
 
@@ -318,16 +370,24 @@ addPunchForm.addEventListener('submit', (e) => {
     e.preventDefault();
     const punchType = punchTypeSelect.value;
     const notes = modalNotesInput.value.trim();
-    const location = modalLocationCoordsInput.value || null; 
-    const photoFilename = modalCurrentPhotoFile ? modalCurrentPhotoFile.name : null; 
+    // Get location value from the hidden input (might be "lat,lon" or "error" or empty)
+    const locationString = modalLocationCoordsInput.value || null;
+    const photoFilename = modalCurrentPhotoFile ? modalCurrentPhotoFile.name : null;
+
+    if (!punchType) {
+        modalPunchFeedback.textContent = 'Selecione um tipo de batida.';
+        modalPunchFeedback.style.color = '#dc3545';
+        setTimeout(() => modalPunchFeedback.textContent = '', 3000);
+        return;
+    }
 
     const newPunch = {
-        id: Date.now(), 
+        id: Date.now(),
         type: punchType,
         timestamp: new Date().toISOString(),
         notes: notes,
-        location: location,
-        photo: photoFilename 
+        location: locationString, // Save the string "lat,lon" or "error"
+        photo: photoFilename
     };
 
     const userPunches = getPunches(currentUser);
@@ -335,74 +395,86 @@ addPunchForm.addEventListener('submit', (e) => {
     savePunches(currentUser, userPunches);
 
     modalPunchFeedback.textContent = `Batida de '${punchType}' registrada com sucesso!`;
-    modalPunchFeedback.style.color = '#28a745'; 
+    modalPunchFeedback.style.color = '#28a745';
 
-    clearAddPunchModalForm();
-    updateTrackingScreenUI();
+    clearAddPunchModalForm(); // Clear after successful save
+    updateTrackingScreenUI(); // Update main screen UI
+    setTimeout(closeModal, 1500); // Close modal automatically after success
+    // No need to reset feedback here as the modal closes
 
-    setTimeout(() => {
-        modalPunchFeedback.textContent = '';
-    }, 3000);
 });
 
 // --- UI Update Functions ---
-
 function updateTrackingScreenUI() {
     if (!currentUser) return;
+
+    clearInterval(sessionInterval); // Clear previous timer
+    sessionInterval = null;
 
     const punches = getPunches(currentUser);
     const lastPunch = punches.length > 0 ? punches[punches.length - 1] : null;
 
     if (lastPunch) {
         const lastPunchDate = new Date(lastPunch.timestamp);
-        lastPunchDetailsSpan.textContent = `${lastPunch.type} em ${lastPunchDate.toLocaleString('pt-BR')}`;
-    } else {
-        lastPunchDetailsSpan.textContent = 'Nenhum registro ainda.';
-    }
+        lastPunchDetailsSpan.textContent = `${lastPunch.type} em ${lastPunchDate.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'medium' })}`;
 
-    if (lastPunch) {
         currentStatusSpan.textContent = lastPunch.type;
-        sessionTimerSpan.textContent = '00:00:00';
+        sessionTimerSpan.textContent = '00:00:00'; // Reset timer display initially
 
         const type = lastPunch.type;
+        // Enable/disable buttons based on the last action
         punchInBtn.disabled = (type === 'Entrada' || type === 'Volta Almoço');
-        startBreakBtn.disabled = (type !== 'Entrada' && type !== 'Volta Almoço') || type === 'Saída Almoço';
+        startBreakBtn.disabled = !(type === 'Entrada' || type === 'Volta Almoço');
         endBreakBtn.disabled = type !== 'Saída Almoço';
-        punchOutBtn.disabled = (type !== 'Entrada' && type !== 'Volta Almoço');
+        punchOutBtn.disabled = !(type === 'Entrada' || type === 'Volta Almoço');
 
+        // Set status color and start timer if applicable
         switch(type) {
             case 'Entrada':
             case 'Volta Almoço':
-                currentStatusSpan.style.color = '#34a853'; 
+                currentStatusSpan.style.color = '#34a853'; // Green
+                // Start session timer from this punch
+                const startTime = lastPunchDate.getTime();
+                sessionInterval = setInterval(() => {
+                    const now = Date.now();
+                    const elapsedSeconds = Math.floor((now - startTime) / 1000);
+                    sessionTimerSpan.textContent = formatDuration(elapsedSeconds);
+                }, 1000);
                 break;
             case 'Saída Almoço':
-                currentStatusSpan.style.color = '#fbbc05'; 
+                currentStatusSpan.style.color = '#fbbc05'; // Yellow
+                 // Start break timer from this punch
+                 const breakStartTime = lastPunchDate.getTime();
+                 sessionInterval = setInterval(() => {
+                     const now = Date.now();
+                     const elapsedSeconds = Math.floor((now - breakStartTime) / 1000);
+                     sessionTimerSpan.textContent = formatDuration(elapsedSeconds);
+                 }, 1000);
                 break;
             case 'Saída':
-                currentStatusSpan.style.color = '#ea4335'; 
+                currentStatusSpan.style.color = '#ea4335'; // Red
+                // No active timer after punching out
                 break;
-            default:
-                currentStatusSpan.style.color = '#6c757d'; 
+            default: // "Outro" type
+                currentStatusSpan.style.color = '#6c757d'; // Grey
+                // Decide if you want a timer for "Outro" - likely not.
         }
 
     } else {
-        currentStatusSpan.textContent = '--';
-        currentStatusSpan.style.color = '#6c757d';
-        sessionTimerSpan.textContent = '00:00:00';
-        punchInBtn.disabled = false;
-        startBreakBtn.disabled = true;
-        endBreakBtn.disabled = true;
-        punchOutBtn.disabled = true;
+        // No punches yet
+        resetTrackingUI();
     }
 }
 
 function resetTrackingUI() {
+    clearInterval(sessionInterval);
+    sessionInterval = null;
     currentStatusSpan.textContent = '--';
     currentStatusSpan.style.color = '#6c757d';
     sessionTimerSpan.textContent = '00:00:00';
     lastPunchDetailsSpan.textContent = 'Nenhum registro ainda.';
     punchFeedback.textContent = '';
-    punchInBtn.disabled = false;
+    punchInBtn.disabled = false; // Can only punch in initially
     startBreakBtn.disabled = true;
     endBreakBtn.disabled = true;
     punchOutBtn.disabled = true;
@@ -414,6 +486,8 @@ quickActionButtons.forEach(button => {
         const punchType = button.getAttribute('data-type');
         openModal();
         punchTypeSelect.value = punchType;
+        // Trigger location automatically for quick actions if desired
+        // modalGetLocationBtn.click();
     });
 });
 
@@ -421,27 +495,27 @@ quickActionButtons.forEach(button => {
 function loadHistory() {
     if (!currentUser) return;
 
-    const punches = getPunches(currentUser).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)); 
-    historyListDiv.innerHTML = ''; 
+    const punches = getPunches(currentUser).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    historyListDiv.innerHTML = '';
 
     if (punches.length === 0) {
         historyListDiv.innerHTML = '<p>Nenhum registro encontrado.</p>';
-        monthSelect.innerHTML = ''; 
-        totalHoursDisplay.textContent = '--'; 
+        monthSelect.innerHTML = '';
+        totalHoursDisplay.textContent = '--';
         return;
     }
 
-    const previouslySelectedMonth = monthSelect.value || "all"; 
-    monthSelect.innerHTML = '<option value="all">Todos os Meses</option>'; 
+    const previouslySelectedMonth = monthSelect.value || "all";
+    monthSelect.innerHTML = '<option value="all">Todos os Meses</option>';
 
     const months = new Set();
     punches.forEach(punch => {
         const date = new Date(punch.timestamp);
-        const monthYear = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`; 
+        const monthYear = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
         months.add(monthYear);
     });
 
-    const sortedMonths = Array.from(months).sort().reverse(); 
+    const sortedMonths = Array.from(months).sort().reverse();
 
     sortedMonths.forEach(monthYear => {
         const option = document.createElement('option');
@@ -453,7 +527,7 @@ function loadHistory() {
     if (sortedMonths.includes(previouslySelectedMonth)) {
         monthSelect.value = previouslySelectedMonth;
     } else {
-         monthSelect.value = "all"; 
+         monthSelect.value = "all";
     }
 
     const filteredPunches = punches.filter(punch => {
@@ -464,18 +538,40 @@ function loadHistory() {
 
     if (filteredPunches.length === 0) {
          historyListDiv.innerHTML = `<p>Nenhum registro encontrado para ${getMonthYearString(monthSelect.value)}.</p>`;
-         totalHoursDisplay.textContent = '0h 0m'; 
+         totalHoursDisplay.textContent = '0h 0m';
     } else {
         filteredPunches.forEach(punch => {
             const punchDate = new Date(punch.timestamp);
             const formattedTimestamp = punchDate.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'medium'});
             const div = document.createElement('div');
+
+            // --- Location Handling ---
+            let locationHtml = '';
+            if (punch.location) {
+                if (punch.location === 'error') {
+                    locationHtml = `<p><strong>Localização:</strong> <span class="punch-details error-text">Erro ao obter</span></p>`;
+                } else {
+                    // Try parsing coordinates - expects "lat,lon"
+                    const coords = punch.location.split(',');
+                    if (coords.length === 2 && !isNaN(parseFloat(coords[0])) && !isNaN(parseFloat(coords[1]))) {
+                        const lat = parseFloat(coords[0]);
+                        const lon = parseFloat(coords[1]);
+                        const mapsLink = createGoogleMapsLink(lat, lon);
+                        locationHtml = `<p><strong>Localização:</strong> <span class="punch-details"><a href="${mapsLink}" target="_blank" rel="noopener noreferrer">Ver no Mapa</a></span></p>`;
+                    } else {
+                         // If it's not "error" but also not "lat,lon", display as is (legacy or manual input?)
+                         locationHtml = `<p><strong>Localização:</strong> <span class="punch-details">${punch.location}</span></p>`;
+                    }
+                }
+            }
+            // --- End Location Handling ---
+
+
             div.innerHTML = `
                 <p><strong>Tipo:</strong> <span class="punch-type">${punch.type}</span></p>
                 <p><strong>Data/Hora:</strong> <span class="punch-time">${formattedTimestamp}</span></p>
                 ${punch.notes ? `<p><strong>Notas:</strong> <span class="punch-details">${punch.notes}</span></p>` : ''}
-                ${punch.location && punch.location !== 'error' ? `<p><strong>Localização:</strong> <span class="punch-details">${punch.location}</span></p>` : ''}
-                ${punch.location === 'error' ? `<p><strong>Localização:</strong> <span class="punch-details error-text">Erro ao obter</span></p>` : ''}
+                ${locationHtml}
                 ${punch.photo ? `<p><strong>Foto:</strong> <span class="punch-details">${punch.photo}</span></p>` : ''}
             `;
             historyListDiv.appendChild(div);
@@ -552,7 +648,15 @@ generatePdfBtn.addEventListener('click', () => {
         punches.forEach(punch => {
             const punchDate = new Date(punch.timestamp);
             const formattedTimestamp = punchDate.toLocaleString('pt-BR');
-            const locationText = punch.location === 'error' ? 'Erro ao obter' : (punch.location || '-');
+            let locationText = '-';
+            if (punch.location) {
+                if (punch.location === 'error') {
+                    locationText = 'Erro ao obter';
+                } else {
+                    // Keep coordinates or original text for PDF brevity
+                    locationText = punch.location;
+                }
+            }
             const photoText = punch.photo || '-';
 
             const punchData = [
@@ -600,16 +704,18 @@ generatePdfBtn.addEventListener('click', () => {
 const savedUser = localStorage.getItem('time_tracker_session');
 if (savedUser) {
     const users = getUsers();
-    if (users[savedUser]) {
+    // Check if user exists in the new structure
+    if (users[savedUser] && users[savedUser].password) { // Check for password existence
         currentUser = savedUser;
         loggedInUserSpan.textContent = currentUser;
         updateDateTime(); 
         if (!dateTimeInterval) { 
             dateTimeInterval = setInterval(updateDateTime, 1000); 
         }
-        updateTrackingScreenUI(); 
+        updateTrackingScreenUI(); // Initial UI update for tracking screen
         showScreen('tracking-screen');
     } else {
+        // If user exists but structure is old or invalid, clear session
         localStorage.removeItem('time_tracker_session');
         resetTrackingUI();
         showScreen('welcome-screen');
