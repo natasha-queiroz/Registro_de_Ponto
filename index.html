@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registro de Ponto</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Add simple icons (optional, using unicode) -->
+</head>
+<body>
+    <div id="app">
+        <!-- Welcome Screen -->
+        <div id="welcome-screen" class="screen active">
+            <h1>Bem-vindo ao Registro de Ponto</h1>
+            <p>Gerencie suas batidas de ponto de forma fácil.</p>
+            <button id="go-to-register">Cadastrar</button>
+            <button id="go-to-login">Entrar</button>
+        </div>
+
+        <!-- Register/Login Screen -->
+        <div id="auth-screen" class="screen">
+            <h2 id="auth-title">Login</h2> <!-- Title changes dynamically -->
+            <form id="auth-form">
+                <div class="form-group">
+                    <label for="username">Nome:</label>
+                    <input type="text" id="username" name="username" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Senha:</label>
+                    <input type="password" id="password" name="password" required>
+                </div>
+                <button type="submit" id="auth-button">Entrar</button>
+                <p id="auth-error" class="error-message"></p>
+                <p><a href="#" id="switch-to-register">Não tem conta? Cadastre-se</a></p>
+                <p><a href="#" id="switch-to-login" style="display: none;">Já tem conta? Faça Login</a></p>
+            </form>
+             <button id="back-to-welcome" class="back-button">Voltar</button>
+        </div>
+
+        <!-- Time Tracking Screen -->
+        <div id="tracking-screen" class="screen">
+            <h2>Registro de Ponto</h2>
+            <p class="user-greeting">Olá, <span id="logged-in-user"></span>!</p>
+            <p class="current-time-display">Hora Atual: <span id="current-datetime"></span></p>
+
+            <div id="status-display">
+                <div id="current-status">Status: <span class="status-text">--</span></div>
+                <div id="session-timer">Duração: <span class="timer-text">00:00:00</span></div>
+            </div>
+
+            <div id="quick-actions">
+                <button id="punch-in" class="quick-action-btn punch-in-btn" data-type="Entrada">▶️ Entrada</button>
+                <button id="start-break" class="quick-action-btn break-btn" data-type="Saída Almoço">⏸️ Iniciar Pausa</button>
+                <button id="end-break" class="quick-action-btn resume-btn" data-type="Volta Almoço">▶️ Terminar Pausa</button>
+                <button id="punch-out" class="quick-action-btn punch-out-btn" data-type="Saída">⏹️ Saída</button>
+            </div>
+
+            <div id="last-punch-info">
+                <p>Último Registro:</p>
+                <span id="last-punch-details">Nenhum registro ainda.</span>
+            </div>
+
+            <p id="punch-feedback" class="feedback-message"></p>
+
+            <!-- Button to open the add punch modal (for "Other" or manual entry) -->
+            <button id="open-add-punch-modal" class="fab" title="Adicionar Registro Manual/Outro">+</button>
+
+            <div class="tracking-footer-buttons">
+                <button id="go-to-history">Ver Histórico Completo</button>
+                <button id="logout" class="logout-btn">Sair</button>
+            </div>
+        </div>
+
+        <!-- History Screen -->
+        <div id="history-screen" class="screen">
+            <h2>Histórico de Batidas</h2>
+             <div class="history-summary">
+                 <p>Total de Horas Trabalhadas (Mês Selecionado): <strong id="total-hours-display">--</strong></p>
+             </div>
+            <div id="history-list">
+                <!-- History will be loaded here -->
+                 <p>Nenhum registro encontrado.</p>
+            </div>
+             <div class="history-controls">
+                 <label for="month-select">Filtrar por Mês:</label>
+                 <select id="month-select">
+                     <!-- Options will be added dynamically -->
+                 </select>
+                <button id="generate-pdf">Gerar Relatório PDF (Mês Selecionado)</button>
+             </div>
+            <button id="back-to-tracking" class="back-button">Voltar</button>
+        </div>
+    </div>
+
+    <!-- Modal for Adding Manual/Other Punch -->
+    <div id="add-punch-modal" class="modal">
+        <div class="modal-content">
+            <span id="close-modal-btn" class="close-modal-btn">&times;</span>
+            <h2>Adicionar Registro Manual / Outro</h2>
+            <form id="add-punch-form">
+                 <p>Use este formulário para adicionar registros do tipo "Outro" ou inserir detalhes adicionais.</p>
+                <p>Data/Hora: <span id="modal-current-datetime"></span></p>
+
+                <div class="form-group">
+                    <label for="punch-type-select">Tipo de Batida:</label>
+                    <select id="punch-type-select" required>
+                        <option value="" disabled selected>Selecione o tipo...</option>
+                        <!-- Keep standard types for reference, but focus on 'Outro' -->
+                        <option value="Entrada">Entrada</option>
+                        <option value="Saída Almoço">Saída Almoço</option>
+                        <option value="Volta Almoço">Volta Almoço</option>
+                        <option value="Saída">Saída</option>
+                        <option value="Outro">Outro (Especifique)</option>
+                    </select>
+                </div>
+
+                 <div class="form-group">
+                    <label for="modal-notes">Informações Adicionais / Descrição "Outro":</label>
+                    <textarea id="modal-notes" rows="3" placeholder="Ex: Reunião externa, Visita ao cliente..."></textarea>
+                </div>
+
+                 <div class="form-group">
+                    <label>Localização (Opcional):</label>
+                    <button type="button" id="modal-get-location">Obter Localização Atual</button>
+                    <span id="modal-location-info">Aguardando...</span>
+                    <input type="hidden" id="modal-location-coords">
+                 </div>
+
+                <div class="form-group">
+                    <label for="modal-photo">Adicionar Foto (Opcional):</label>
+                    <input type="file" id="modal-photo" accept="image/*">
+                    <span id="modal-photo-info">Nenhuma foto selecionada.</span>
+                    <!-- Add image preview element -->
+                    <img id="modal-photo-preview" src="#" alt="Pré-visualização da Foto" style="display: none;" />
+                </div>
+
+                <button type="submit" id="save-punch-btn">Salvar Registro</button>
+                 <p id="modal-punch-feedback" class="feedback-message"></p>
+            </form>
+        </div>
+    </div>
+
+
+    <!-- Import Map for JS Libraries -->
+    <script type="importmap">
+      {
+        "imports": {
+          "jspdf": "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js",
+          "jspdf-autotable": "https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.1/jspdf.plugin.autotable.min.js"
+        }
+      }
+    </script>
+    <script type="module" src="script.js"></script>
+</body>
+</html>
